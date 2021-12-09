@@ -3,7 +3,7 @@ import EventEmitter from 'events';
 import { browser } from 'webextension-polyfill-ts';
 import BigNumber from 'bignumber.js';
 import * as SDK from 'gridplus-sdk';
-import Transaction from 'ethereumjs-tx';
+import { TransactionFactory } from '@ethereumjs/tx';
 import Common from '@ethereumjs/common';
 import * as Util from 'ethereumjs-util';
 const keyringType = 'GridPlus Hardware';
@@ -25,7 +25,7 @@ class LatticeKeyring extends EventEmitter {
   // Keyring API (per `https://github.com/MetaMask/eth-simple-keyring`)
   //-------------------------------------------------------------------
   deserialize(opts = {}) {
-    if (opts.hdPath) this.hdPath = opts.hdPath;
+    this.hdPath = STANDARD_HD_PATH;
     if (opts.creds) this.creds = opts.creds;
     if (opts.accounts) this.accounts = opts.accounts;
     if (opts.accountIndices) this.accountIndices = opts.accountIndices;
@@ -39,8 +39,8 @@ class LatticeKeyring extends EventEmitter {
     return Promise.resolve();
   }
 
-  setHdPath(hdPath) {
-    this.hdPath = hdPath;
+  setHdPath() {
+    this.hdPath = STANDARD_HD_PATH;
   }
 
   serialize() {
@@ -170,8 +170,9 @@ class LatticeKeyring extends EventEmitter {
           // To ensure everything plays nicely with gridplus-sdk, we convert everything to hex strings
           const addressIdx = this.accountIndices[accountIdx];
           const addressParentPath = this.accountOpts[accountIdx].hdPath;
+          const chainId = this._getEthereumJsChainId(tx);
           const txData = {
-            chainId: `0x${this._getEthereumJsChainId(tx).toString('hex')}` || 1,
+            chainId: `0x${chainId.toString('hex')}` || 1,
             nonce: `0x${tx.nonce.toString('hex')}` || 0,
             gasLimit: `0x${tx.gasLimit.toString('hex')}`,
             to: tx.to.toString('hex'),
@@ -276,7 +277,7 @@ class LatticeKeyring extends EventEmitter {
             'london'
           );
 
-          validatingTx = Transaction.TransactionFactory.fromTxData(txToReturn, {
+          validatingTx = TransactionFactory.fromTxData(txToReturn, {
             common: customNetwork,
             freeze: Object.isFrozen(tx),
           });
@@ -790,10 +791,11 @@ class LatticeKeyring extends EventEmitter {
   // Get the chainId for whatever object this is.
   // Returns a hex string without the 0x prefix
   _getEthereumJsChainId(tx) {
-    if (typeof tx.getChainId === 'function') return tx.getChainId();
-    else if (tx.common && typeof tx.common.chainIdBN === 'function')
-      return tx.common.chainIdBN().toString(16);
-    else if (typeof tx.chainId === 'number') return tx.chainId.toString(16);
+    // if (tx.getChainId && typeof tx.getChainId === 'function')
+    //   return tx.getChainId();
+    // else if (tx.common && typeof tx.common.chainIdBN === 'function')
+    //   return tx.common.chainIdBN().toString(16);
+    if (typeof tx.chainId === 'number') return tx.chainId.toString(16);
     else if (typeof tx.chainId === 'string') return tx.chainId;
     return '1';
   }
