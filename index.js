@@ -6,6 +6,7 @@ import * as SDK from 'gridplus-sdk';
 import { TransactionFactory } from '@ethereumjs/tx';
 import Common from '@ethereumjs/common';
 import * as Util from 'ethereumjs-util';
+
 const keyringType = 'GridPlus Hardware';
 const HARDENED_OFFSET = 0x80000000;
 const PER_PAGE = 10;
@@ -791,12 +792,15 @@ class LatticeKeyring extends EventEmitter {
   // Get the chainId for whatever object this is.
   // Returns a hex string without the 0x prefix
   _getEthereumJsChainId(tx) {
-    // if (tx.getChainId && typeof tx.getChainId === 'function')
-    //   return tx.getChainId();
-    // else if (tx.common && typeof tx.common.chainIdBN === 'function')
-    //   return tx.common.chainIdBN().toString(16);
-    if (typeof tx.chainId === 'number') return tx.chainId.toString(16);
-    else if (typeof tx.chainId === 'string') return tx.chainId;
+    if (typeof tx.getChainId === 'function') {
+      return tx.getChainId().toString('16');
+    } else if (tx.common && typeof tx.common.chainIdBN === 'function') {
+      return tx.common.chainIdBN().toString(16);
+    } else if (typeof tx.chainId === 'number') {
+      return tx.chainId.toString(16);
+    } else if (typeof tx.chainId === 'string') {
+      return tx.chainId;
+    }
     return '1';
   }
 
