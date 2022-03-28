@@ -9,7 +9,7 @@ import * as Util from 'ethereumjs-util';
 
 const keyringType = 'GridPlus Hardware';
 const HARDENED_OFFSET = 0x80000000;
-const PER_PAGE = 10;
+const PER_PAGE = 5;
 const CLOSE_CODE = -1000;
 const STANDARD_HD_PATH = "m/44'/60'/0'/0/x";
 
