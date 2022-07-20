@@ -8,7 +8,7 @@ import Util from 'ethereumjs-util';
 import secp256k1 from 'secp256k1';
 import rlp from 'rlp';
 
-const keyringType = 'Lattice Hardware';
+const keyringType = 'GridPlus Hardware';
 const HARDENED_OFFSET = 0x80000000;
 const PER_PAGE = 5;
 const CLOSE_CODE = -1000;
