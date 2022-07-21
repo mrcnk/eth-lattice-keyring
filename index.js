@@ -1,11 +1,9 @@
 import crypto from 'crypto';
 import EventEmitter from 'events';
 import BN from 'bn.js';
-import SDK from 'gridplus-sdk';
-import EthTx from '@ethereumjs/tx';
-import Common from '@ethereumjs/common';
-import Util from 'ethereumjs-util';
-import secp256k1 from 'secp256k1';
+import * as SDK from 'gridplus-sdk';
+import { TransactionFactory } from '@ethereumjs/tx';
+import * as Util from 'ethereumjs-util';
 import rlp from 'rlp';
 
 const keyringType = 'GridPlus Hardware';
@@ -17,10 +15,10 @@ const SDK_TIMEOUT = 120000;
 const CONNECT_TIMEOUT = 20000;
 
 class LatticeKeyring extends EventEmitter {
-  constructor(opts = {}) {
-    super();
-    this.type = keyringType;
+  constructor (opts={}) {
+    super()
     this.appName = 'Rabby';
+    this.type = keyringType;
     this._resetDefaults();
     this.deserialize(opts);
   }
@@ -29,8 +27,7 @@ class LatticeKeyring extends EventEmitter {
   // Keyring API (per `https://github.com/MetaMask/eth-simple-keyring`)
   //-------------------------------------------------------------------
   async deserialize (opts = {}) {
-    if (opts.hdPath)
-      this.hdPath = opts.hdPath;
+      this.hdPath = STANDARD_HD_PATH;
     if (opts.creds)
       this.creds = opts.creds;
     if (opts.accounts)
@@ -66,7 +63,7 @@ class LatticeKeyring extends EventEmitter {
       accountOpts: this.accountOpts,
       walletUID: this.walletUID,
       appName: this.appName,
-      name: this.name, // Legacy; use is deprecated
+      name: this.name,  // Legacy; use is deprecated
       network: this.network,
       page: this.page,
       hdPath: this.hdPath,
@@ -245,7 +242,7 @@ class LatticeKeyring extends EventEmitter {
         'switch to an account on your current active wallet.'
       );
     }
-    return EthTx.TransactionFactory.fromTxData(txToReturn, {
+    return TransactionFactory.fromTxData(txToReturn, {
       common: tx.common, freeze: Object.isFrozen(tx)
     })
   }
@@ -320,7 +317,7 @@ class LatticeKeyring extends EventEmitter {
         this.accountOpts.splice(i, 1);
         return;
       }
-    });
+    })
   }
 
   async getFirstPage() {
@@ -335,11 +332,12 @@ class LatticeKeyring extends EventEmitter {
   async getPreviousPage () {
     return this._getPage(-1);
   }
-  setAccountToUnlock(index) {
-    this.unlockedAccount = parseInt(index, 10);
+
+  setAccountToUnlock (index) {
+    this.unlockedAccount = parseInt(index, 10)
   }
 
-  forgetDevice() {
+  forgetDevice () {
     this._resetDefaults();
   }
 
@@ -406,12 +404,12 @@ class LatticeKeyring extends EventEmitter {
     return accountIdx;
   }
 
-  _getHDPathIndices(hdPath, insertIdx = 0) {
+  _getHDPathIndices(hdPath, insertIdx=0) {
     const path = hdPath.split('/').slice(1);
     const indices = [];
     let usedX = false;
     path.forEach((_idx) => {
-      const isHardened = _idx[_idx.length - 1] === "'";
+      const isHardened = (_idx[_idx.length - 1] === "'");
       let idx = isHardened ? HARDENED_OFFSET : 0;
       // If there is an `x` in the path string, we will use it to insert our
       // index. This is useful for e.g. Ledger Live path. Most paths have the
@@ -426,7 +424,7 @@ class LatticeKeyring extends EventEmitter {
         idx += Number(_idx);
       }
       indices.push(idx);
-    });
+    })
     // If this path string does not include an `x`, we just append the index
     // to the end of the extracted set
     if (usedX === false) {
@@ -434,7 +432,7 @@ class LatticeKeyring extends EventEmitter {
     }
     // Sanity check -- Lattice firmware will throw an error for large paths
     if (indices.length > 5)
-      throw new Error('Only HD paths with up to 5 indices are allowed.');
+      throw new Error('Only HD paths with up to 5 indices are allowed.')
     return indices;
   }
 
@@ -465,8 +463,8 @@ class LatticeKeyring extends EventEmitter {
         return { chromium: browserTab };
       } else if (browser && browser.tabs && browser.tabs.create) {
         // FireFox extensions do not run in windows, so it will return `null` from
-        // `window.open`. Instead, we need to use the `browser` API to open a tab.
-        // We will surveille this tab to see if its URL parameters change, which
+        // `window.open`. Instead, we need to use the `browser` API to open a tab. 
+        // We will surveille this tab to see if its URL parameters change, which 
         // will indicate that the user has logged in.
         const tab = await browser.tabs.create({url})
         return { firefox: tab };
@@ -482,7 +480,7 @@ class LatticeKeyring extends EventEmitter {
     const tabs = await browser.tabs.query({});
     return tabs.find((tab) => tab.id === id);
   }
-
+  
   _getCreds() {
     return new Promise((resolve, reject) => {
       // We only need to setup if we don't have a deviceID
@@ -491,8 +489,8 @@ class LatticeKeyring extends EventEmitter {
       // If we are not aware of what Lattice we should be talking to,
       // we need to open a window that lets the user go through the
       // pairing or connection process.
-      const name = this.appName ? this.appName : 'Rabby';
-      const base = 'https://wallet.gridplus.io';
+      const name = this.appName ? this.appName : 'Unknown'
+      const base = 'https://lattice.gridplus.io';
       const url = `${base}?keyring=${name}&forceLogin=true`;
       let listenInterval;
 
@@ -507,9 +505,7 @@ class LatticeKeyring extends EventEmitter {
           // Parse and return creds
           const creds = JSON.parse(event.data);
           if (!creds.deviceID || !creds.password)
-            return reject(
-              new Error('Invalid credentials returned from Lattice.')
-            );
+            return reject(new Error('Invalid credentials returned from Lattice.'));
           return resolve(creds);
         } catch (err) {
           return reject(err);
@@ -517,10 +513,11 @@ class LatticeKeyring extends EventEmitter {
       }
 
       // Open the tab
-      this._openConnectorTab(url).then((conn) => {
+      this._openConnectorTab(url)
+      .then((conn) => {
         if (conn.chromium) {
           // On a Chromium browser we can just listen for a window message
-          window.addEventListener('message', receiveMessage, false);
+          window.addEventListener("message", receiveMessage, false);
           // Watch for the open window closing before creds are sent back
           listenInterval = setInterval(() => {
             if (conn.chromium.closed) {
@@ -533,46 +530,42 @@ class LatticeKeyring extends EventEmitter {
           // directly communicate with the tabs very easily so we use a
           // workaround: listen for changes to the URL, which will contain
           // the login info.
-          // NOTE: This will only work if have `https://wallet.gridplus.io/*`
+          // NOTE: This will only work if have `https://lattice.gridplus.io/*`
           // host permissions in your manifest file (and also `activeTab` permission)
           const loginUrlParam = '&loginCache=';
           listenInterval = setInterval(() => {
-            this._findTabById(conn.firefox.id).then((tab) => {
+            this._findTabById(conn.firefox.id)
+            .then((tab) => {
               if (!tab || !tab.url) {
                 return reject(new Error('Lattice connector closed.'));
               }
               // If the tab we opened contains a new URL param
               const paramLoc = tab.url.indexOf(loginUrlParam);
-              if (paramLoc < 0) return;
+              if (paramLoc < 0) 
+                return;
               const dataLoc = paramLoc + loginUrlParam.length;
               // Stop this interval
               clearInterval(listenInterval);
               try {
-                // Parse the login data. It is a stringified JSON object
+                // Parse the login data. It is a stringified JSON object 
                 // encoded as a base64 string.
-                const _creds = Buffer.from(
-                  tab.url.slice(dataLoc),
-                  'base64'
-                ).toString();
+                const _creds = Buffer.from(tab.url.slice(dataLoc), 'base64').toString();
                 // Close the tab and return the credentials
-                browser.tabs.remove(tab.id).then(() => {
+                browser.tabs.remove(tab.id)
+                .then(() => {
                   const creds = JSON.parse(_creds);
                   if (!creds.deviceID || !creds.password)
-                    return reject(
-                      new Error('Invalid credentials returned from Lattice.')
-                    );
+                    return reject(new Error('Invalid credentials returned from Lattice.'));
                   return resolve(creds);
-                });
+                })
               } catch (err) {
-                return reject(
-                  'Failed to get login data from Lattice. Please try again.'
-                );
+                return reject('Failed to get login data from Lattice. Please try again.')
               }
-            });
+            })
           }, 500);
         }
-      });
-    });
+      })
+    })
   }
 
   // [re]connect to the Lattice. This should be done frequently to ensure
@@ -609,7 +602,6 @@ class LatticeKeyring extends EventEmitter {
     /* 
     NOTE: We need state to actually be synced by MetaMask or we can't
     use this. See: https://github.com/MetaMask/KeyringController/issues/130
-
     if (this.sdkState) {
       // If we have state data we can fully rehydrate the session.
       setupData = {
@@ -661,7 +653,8 @@ class LatticeKeyring extends EventEmitter {
   async _getPage(increment=0) {
     try {
       this.page += increment;
-      if (this.page < 0) this.page = 0;
+      if (this.page < 0)
+        this.page = 0;
       const start = PER_PAGE * this.page;
       // Otherwise unlock the device and fetch more addresses
       await this.unlock()
@@ -695,24 +688,19 @@ class LatticeKeyring extends EventEmitter {
   }
 
   _hasCreds() {
-    return (
-      this.creds.deviceID !== null &&
-      this.creds.password !== null &&
-      this.appName
-    );
+    return this.creds.deviceID !== null && this.creds.password !== null && this.appName;
   }
 
   _genSessionKey() {
-    if (this.name && !this.appName)
-      // Migrate from legacy param if needed
+    if (this.name && !this.appName) // Migrate from legacy param if needed
       this.appName = this.name;
     if (!this._hasCreds())
       throw new Error('No credentials -- cannot create session key!');
     const buf = Buffer.concat([
-      Buffer.from(this.creds.password),
-      Buffer.from(this.creds.deviceID),
-      Buffer.from(this.appName),
-    ]);
+      Buffer.from(this.creds.password), 
+      Buffer.from(this.creds.deviceID), 
+      Buffer.from(this.appName)
+    ])
     return crypto.createHash('sha256').update(buf).digest();
   }
 
@@ -722,8 +710,9 @@ class LatticeKeyring extends EventEmitter {
   // derivation paths. Ledger is SO ANNOYING TO SUPPORT.
   _hdPathHasInternalVarIdx() {
     const path = this.hdPath.split('/').slice(1);
-    for (let i = 0; i < path.length - 1; i++) {
-      if (path[i].indexOf('x') > -1) return true;
+    for (let i = 0; i < path.length -1; i++) {
+      if (path[i].indexOf('x') > -1)
+        return true;
     }
     return false;
   }
