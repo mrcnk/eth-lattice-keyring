@@ -15,8 +15,8 @@ const SDK_TIMEOUT = 120000;
 const CONNECT_TIMEOUT = 20000;
 
 class LatticeKeyring extends EventEmitter {
-  constructor (opts={}) {
-    super()
+  constructor(opts = {}) {
+    super();
     this.appName = 'Rabby';
     this.type = keyringType;
     this._resetDefaults();
@@ -26,33 +26,25 @@ class LatticeKeyring extends EventEmitter {
   //-------------------------------------------------------------------
   // Keyring API (per `https://github.com/MetaMask/eth-simple-keyring`)
   //-------------------------------------------------------------------
-  async deserialize (opts = {}) {
-      this.hdPath = STANDARD_HD_PATH;
-    if (opts.creds)
-      this.creds = opts.creds;
-    if (opts.accounts)
-      this.accounts = opts.accounts;
-    if (opts.accountIndices)
-      this.accountIndices = opts.accountIndices;
-    if (opts.accountOpts)
-      this.accountOpts = opts.accountOpts;
-    if (opts.walletUID)
-      this.walletUID = opts.walletUID;
-    if (opts.name)  // Legacy; use is deprecated and appName is more descriptive
+  async deserialize(opts = {}) {
+    this.hdPath = STANDARD_HD_PATH;
+    if (opts.creds) this.creds = opts.creds;
+    if (opts.accounts) this.accounts = opts.accounts;
+    if (opts.accountIndices) this.accountIndices = opts.accountIndices;
+    if (opts.accountOpts) this.accountOpts = opts.accountOpts;
+    if (opts.walletUID) this.walletUID = opts.walletUID;
+    if (opts.name)
+      // Legacy; use is deprecated and appName is more descriptive
       this.appName = opts.name;
-    if (opts.appName)
-      this.appName = opts.appName;
-    if (opts.network)
-      this.network = opts.network;
-    if (opts.page)
-      this.page = opts.page;
-    if (opts.sdkState)
-      this.sdkState = opts.sdkState;
+    if (opts.appName) this.appName = opts.appName;
+    if (opts.network) this.network = opts.network;
+    if (opts.page) this.page = opts.page;
+    if (opts.sdkState) this.sdkState = opts.sdkState;
     return;
   }
 
-  setHdPath() {
-    this.hdPath = STANDARD_HD_PATH;
+  setHdPath(hdPath = STANDARD_HD_PATH) {
+    this.hdPath = hdPath;
   }
 
   async serialize() {
@@ -63,30 +55,28 @@ class LatticeKeyring extends EventEmitter {
       accountOpts: this.accountOpts,
       walletUID: this.walletUID,
       appName: this.appName,
-      name: this.name,  // Legacy; use is deprecated
+      name: this.name, // Legacy; use is deprecated
       network: this.network,
       page: this.page,
       hdPath: this.hdPath,
-      sdkState: this.sdkSession ? 
-                this.sdkSession.getStateData() :
-                null
+      sdkState: this.sdkSession ? this.sdkSession.getStateData() : null
     };
   }
 
   // Deterimine if we have a connection to the Lattice and an existing wallet UID
   // against which to make requests.
-  isUnlocked () {
+  isUnlocked() {
     return !!this._getCurrentWalletUID() && !!this.sdkSession;
   }
 
   // Initialize a session with the Lattice1 device using the GridPlus SDK
   // NOTE: `bypassOnStateData=true` allows us to rehydrate a new SDK session without
-  // reconnecting to the target Lattice. This is only currently used for signing 
+  // reconnecting to the target Lattice. This is only currently used for signing
   // because it eliminates the need for 2 connection requests and shaves off ~4-6sec.
   // We avoid passing `bypassOnStateData=true` for other calls on `unlock` to avoid
   // possible edge cases related to this new functionality (it's probably fine - just
   // being cautious). In the future we may remove `bypassOnStateData` entirely.
-  async unlock (bypassOnStateData = false) {
+  async unlock(bypassOnStateData = false) {
     // Force compatability. `this.accountOpts` were added after other
     // state params and must be synced in order for this keyring to function.
     if (
@@ -96,12 +86,12 @@ class LatticeKeyring extends EventEmitter {
     ) {
       this.forgetDevice();
       throw new Error(
-        "You can now add multiple Lattice and SafeCard accounts at the same time! " +
-        "Your accounts have been cleared. Please press Continue to add them back in."
+        'You can now add multiple Lattice and SafeCard accounts at the same time! ' +
+          'Your accounts have been cleared. Please press Continue to add them back in.'
       );
     }
     if (this.isUnlocked()) {
-      return "Unlocked";
+      return 'Unlocked';
     }
     const creds = await this._getCreds();
     if (creds) {
@@ -113,27 +103,25 @@ class LatticeKeyring extends EventEmitter {
     // If state data was provided and if we are authorized to
     // bypass reconnecting, we can exit here.
     if (includedStateData && bypassOnStateData) {
-      return "Unlocked";
+      return 'Unlocked';
     }
     await this._connect();
-    return "Unlocked";
+    return 'Unlocked';
   }
 
   // Add addresses to the local store and return the full result
-  async addAccounts(n=1) {
+  async addAccounts(n = 1) {
     if (n === CLOSE_CODE) {
-      // Special case: use a code to forget the device. 
+      // Special case: use a code to forget the device.
       // (This function is overloaded due to constraints upstream)
       this.forgetDevice();
       return [];
     } else if (n <= 0) {
       // Avoid non-positive numbers.
-      throw new Error(
-        'Number of accounts to add must be a positive number.'
-      );
+      throw new Error('Number of accounts to add must be a positive number.');
     }
     // Normal behavior: establish the connection and fetch addresses.
-    await this.unlock()
+    await this.unlock();
     const addrs = await this._fetchAddresses(n, this.unlockedAccount);
     const walletUID = this._getCurrentWalletUID();
     if (!walletUID) {
@@ -146,20 +134,22 @@ class LatticeKeyring extends EventEmitter {
     addrs.forEach((addr, i) => {
       let alreadySaved = false;
       for (let j = 0; j < this.accounts.length; j++) {
-        if ((this.accounts[j] === addr) && 
-            (this.accountOpts[j].walletUID === walletUID) &&
-            (this.accountOpts[j].hdPath === this.hdPath))
+        if (
+          this.accounts[j] === addr &&
+          this.accountOpts[j].walletUID === walletUID &&
+          this.accountOpts[j].hdPath === this.hdPath
+        )
           alreadySaved = true;
       }
       if (!alreadySaved) {
         this.accounts.push(addr);
-        this.accountIndices.push(this.unlockedAccount+i);
+        this.accountIndices.push(this.unlockedAccount + i);
         this.accountOpts.push({
           walletUID,
-          hdPath: this.hdPath,
-        })
+          hdPath: this.hdPath
+        });
       }
-    })
+    });
     return this.accounts;
   }
 
@@ -168,7 +158,7 @@ class LatticeKeyring extends EventEmitter {
     return this.accounts ? [...this.accounts] : [];
   }
 
-  async signTransaction (address, tx) {
+  async signTransaction(address, tx) {
     let signedTx, v;
     // We will be adding a signature to hydration data for a new
     // transaction object since the sig data is not mutable.
@@ -193,13 +183,13 @@ class LatticeKeyring extends EventEmitter {
       const data = {
         // Legacy transactions return tx params. Newer transactions
         // return the raw, serialized transaction
-        payload:  tx._type ?
-                  tx.getMessageToSign(false) :
-                  rlp.encode(tx.getMessageToSign(false)),
+        payload: tx._type
+          ? tx.getMessageToSign(false)
+          : rlp.encode(tx.getMessageToSign(false)),
         curveType: SDK.Constants.SIGNING.CURVES.SECP256K1,
         hashType: SDK.Constants.SIGNING.HASHES.KECCAK256,
         encodingType: SDK.Constants.SIGNING.ENCODINGS.EVM,
-        signerPath,
+        signerPath
       };
       // Check if we can decode the calldata
       data.decoder = await getCalldataDecoder(tx);
@@ -222,7 +212,7 @@ class LatticeKeyring extends EventEmitter {
       v = SDK.Utils.getV(tx, signedTx);
     } else {
       // Legacy signatures have `v` in the response
-      v = signedTx.sig.v.length === 0 ? '0' : signedTx.sig.v.toString('hex')
+      v = signedTx.sig.v.length === 0 ? '0' : signedTx.sig.v.toString('hex');
     }
 
     // Pack the signature into the return object
@@ -236,58 +226,62 @@ class LatticeKeyring extends EventEmitter {
     if (foundIdx === null) {
       throw new Error(
         'Wrong account. Please change your Lattice wallet or ' +
-        'switch to an account on your current active wallet.'
+          'switch to an account on your current active wallet.'
       );
     }
     return TransactionFactory.fromTxData(txToReturn, {
-      common: tx.common, freeze: Object.isFrozen(tx)
-    })
+      common: tx.common,
+      freeze: Object.isFrozen(tx)
+    });
   }
 
   async signPersonalMessage(address, msg) {
-    return this.signMessage(address, { payload: msg, protocol: 'signPersonal' });
+    return this.signMessage(address, {
+      payload: msg,
+      protocol: 'signPersonal'
+    });
   }
 
   async signTypedData(address, msg, opts) {
-    if (opts.version && (opts.version !== 'V4' && opts.version !== 'V3')) {
+    if (opts.version && opts.version !== 'V4' && opts.version !== 'V3') {
       throw new Error(
         `Only signTypedData V3 and V4 messages (EIP712) are supported. Got version ${opts.version}`
       );
     }
-    return this.signMessage(address, { payload: msg, protocol: 'eip712' })
+    return this.signMessage(address, { payload: msg, protocol: 'eip712' });
   }
 
-  async signMessage (address, msg) {
+  async signMessage(address, msg) {
     const accountIdx = await this._findSignerIdx(address);
     let { payload, protocol } = msg;
     // If the message is not an object we assume it is a legacy signPersonal request
     if (!payload || !protocol) {
       payload = msg;
-      protocol = "signPersonal";
+      protocol = 'signPersonal';
     }
     const addressIdx = this.accountIndices[accountIdx];
     const addressParentPath = this.accountOpts[accountIdx].hdPath;
     const req = {
-      currency: "ETH_MSG",
+      currency: 'ETH_MSG',
       data: {
         protocol,
         payload,
-        signerPath: this._getHDPathIndices(addressParentPath, addressIdx),
-      },
+        signerPath: this._getHDPathIndices(addressParentPath, addressIdx)
+      }
     };
     const res = await this.sdkSession.sign(req);
     if (!res.sig) {
-      throw new Error("No signature returned");
+      throw new Error('No signature returned');
     }
     // Convert the `v` to a number. It should convert to 0 or 1
     let v;
     try {
-      v = res.sig.v.toString("hex");
+      v = res.sig.v.toString('hex');
       if (v.length < 2) {
         v = `0${v}`;
       }
     } catch (err) {
-      throw new Error("Invalid signature format returned.");
+      throw new Error('Invalid signature format returned.');
     }
     // Make sure the active wallet is correct to avoid returning
     // a signature from an unexpected signer.
@@ -295,7 +289,7 @@ class LatticeKeyring extends EventEmitter {
     if (foundIdx === null) {
       throw new Error(
         'Wrong account. Please change your Lattice wallet or ' +
-        'switch to an account on your current active wallet.'
+          'switch to an account on your current active wallet.'
       );
     }
     // Return the sig string
@@ -314,7 +308,7 @@ class LatticeKeyring extends EventEmitter {
         this.accountOpts.splice(i, 1);
         return;
       }
-    })
+    });
   }
 
   async getFirstPage() {
@@ -322,19 +316,19 @@ class LatticeKeyring extends EventEmitter {
     return this._getPage(0);
   }
 
-  async getNextPage () {
+  async getNextPage() {
     return this._getPage(1);
   }
 
-  async getPreviousPage () {
+  async getPreviousPage() {
     return this._getPage(-1);
   }
 
-  setAccountToUnlock (index) {
-    this.unlockedAccount = parseInt(index, 10)
+  setAccountToUnlock(index) {
+    this.unlockedAccount = parseInt(index, 10);
   }
 
-  forgetDevice () {
+  forgetDevice() {
     this._resetDefaults();
   }
 
@@ -343,7 +337,7 @@ class LatticeKeyring extends EventEmitter {
   //-------------------------------------------------------------------
   // Find the account index of the requested address.
   // Note that this is the BIP39 path index, not the index in the address cache.
-  async _findSignerIdx (address) {
+  async _findSignerIdx(address) {
     // Take note if this was already unlocked
     const wasUnlocked = this.isUnlocked();
     // Unlock and get the wallet UID. We will bypass the reconnection
@@ -365,7 +359,7 @@ class LatticeKeyring extends EventEmitter {
     }
     // If we could not find a match, exit here
     throw new Error(
-      "Account not found in active Lattice wallet. Please switch."
+      'Account not found in active Lattice wallet. Please switch.'
     );
   }
 
@@ -378,11 +372,11 @@ class LatticeKeyring extends EventEmitter {
     const activeWallet = this.sdkSession.getActiveWallet();
     if (!activeWallet) {
       this._connect();
-      throw new Error("No active wallet in Lattice.");
+      throw new Error('No active wallet in Lattice.');
     }
-    const activeUID = activeWallet.uid.toString("hex");
+    const activeUID = activeWallet.uid.toString('hex');
     // If this is already the active wallet we don't need to make a request
-    if (walletUID.toString("hex") === activeUID) {
+    if (walletUID.toString('hex') === activeUID) {
       return accountIdx;
     }
     return null;
@@ -392,21 +386,20 @@ class LatticeKeyring extends EventEmitter {
     const addrs = await this.getAccounts();
     let accountIdx = -1;
     addrs.forEach((addr, i) => {
-      if (address.toLowerCase() === addr.toLowerCase())
-        accountIdx = i;
-    })
+      if (address.toLowerCase() === addr.toLowerCase()) accountIdx = i;
+    });
     if (accountIdx < 0) {
       throw new Error('Signer not present');
     }
     return accountIdx;
   }
 
-  _getHDPathIndices(hdPath, insertIdx=0) {
+  _getHDPathIndices(hdPath, insertIdx = 0) {
     const path = hdPath.split('/').slice(1);
     const indices = [];
     let usedX = false;
     path.forEach((_idx) => {
-      const isHardened = (_idx[_idx.length - 1] === "'");
+      const isHardened = _idx[_idx.length - 1] === "'";
       let idx = isHardened ? HARDENED_OFFSET : 0;
       // If there is an `x` in the path string, we will use it to insert our
       // index. This is useful for e.g. Ledger Live path. Most paths have the
@@ -421,7 +414,7 @@ class LatticeKeyring extends EventEmitter {
         idx += Number(_idx);
       }
       indices.push(idx);
-    })
+    });
     // If this path string does not include an `x`, we just append the index
     // to the end of the extracted set
     if (usedX === false) {
@@ -429,7 +422,7 @@ class LatticeKeyring extends EventEmitter {
     }
     // Sanity check -- Lattice firmware will throw an error for large paths
     if (indices.length > 5)
-      throw new Error('Only HD paths with up to 5 indices are allowed.')
+      throw new Error('Only HD paths with up to 5 indices are allowed.');
     return indices;
   }
 
@@ -441,7 +434,7 @@ class LatticeKeyring extends EventEmitter {
     this.creds = {
       deviceID: null,
       password: null,
-      endpoint: null,
+      endpoint: null
     };
     this.walletUID = null;
     this.sdkSession = null;
@@ -460,13 +453,15 @@ class LatticeKeyring extends EventEmitter {
         return { chromium: browserTab };
       } else if (browser && browser.tabs && browser.tabs.create) {
         // FireFox extensions do not run in windows, so it will return `null` from
-        // `window.open`. Instead, we need to use the `browser` API to open a tab. 
-        // We will surveille this tab to see if its URL parameters change, which 
+        // `window.open`. Instead, we need to use the `browser` API to open a tab.
+        // We will surveille this tab to see if its URL parameters change, which
         // will indicate that the user has logged in.
-        const tab = await browser.tabs.create({url})
+        const tab = await browser.tabs.create({ url });
         return { firefox: tab };
       } else {
-        throw new Error('Unknown browser context. Cannot open Lattice connector.');
+        throw new Error(
+          'Unknown browser context. Cannot open Lattice connector.'
+        );
       }
     } catch (err) {
       throw new Error('Failed to open Lattice connector.');
@@ -477,16 +472,15 @@ class LatticeKeyring extends EventEmitter {
     const tabs = await browser.tabs.query({});
     return tabs.find((tab) => tab.id === id);
   }
-  
+
   _getCreds() {
     return new Promise((resolve, reject) => {
       // We only need to setup if we don't have a deviceID
-      if (this._hasCreds())
-        return resolve();
+      if (this._hasCreds()) return resolve();
       // If we are not aware of what Lattice we should be talking to,
       // we need to open a window that lets the user go through the
       // pairing or connection process.
-      const name = this.appName ? this.appName : 'Unknown'
+      const name = this.appName ? this.appName : 'Unknown';
       const base = 'https://lattice.gridplus.io';
       const url = `${base}?keyring=${name}&forceLogin=true`;
       let listenInterval;
@@ -494,15 +488,16 @@ class LatticeKeyring extends EventEmitter {
       // PostMessage handler
       function receiveMessage(event) {
         // Ensure origin
-        if (event.origin !== base)
-          return;
+        if (event.origin !== base) return;
         try {
           // Stop the listener
           clearInterval(listenInterval);
           // Parse and return creds
           const creds = JSON.parse(event.data);
           if (!creds.deviceID || !creds.password)
-            return reject(new Error('Invalid credentials returned from Lattice.'));
+            return reject(
+              new Error('Invalid credentials returned from Lattice.')
+            );
           return resolve(creds);
         } catch (err) {
           return reject(err);
@@ -510,11 +505,10 @@ class LatticeKeyring extends EventEmitter {
       }
 
       // Open the tab
-      this._openConnectorTab(url)
-      .then((conn) => {
+      this._openConnectorTab(url).then((conn) => {
         if (conn.chromium) {
           // On a Chromium browser we can just listen for a window message
-          window.addEventListener("message", receiveMessage, false);
+          window.addEventListener('message', receiveMessage, false);
           // Watch for the open window closing before creds are sent back
           listenInterval = setInterval(() => {
             if (conn.chromium.closed) {
@@ -531,50 +525,54 @@ class LatticeKeyring extends EventEmitter {
           // host permissions in your manifest file (and also `activeTab` permission)
           const loginUrlParam = '&loginCache=';
           listenInterval = setInterval(() => {
-            this._findTabById(conn.firefox.id)
-            .then((tab) => {
+            this._findTabById(conn.firefox.id).then((tab) => {
               if (!tab || !tab.url) {
                 return reject(new Error('Lattice connector closed.'));
               }
               // If the tab we opened contains a new URL param
               const paramLoc = tab.url.indexOf(loginUrlParam);
-              if (paramLoc < 0) 
-                return;
+              if (paramLoc < 0) return;
               const dataLoc = paramLoc + loginUrlParam.length;
               // Stop this interval
               clearInterval(listenInterval);
               try {
-                // Parse the login data. It is a stringified JSON object 
+                // Parse the login data. It is a stringified JSON object
                 // encoded as a base64 string.
-                const _creds = Buffer.from(tab.url.slice(dataLoc), 'base64').toString();
+                const _creds = Buffer.from(
+                  tab.url.slice(dataLoc),
+                  'base64'
+                ).toString();
                 // Close the tab and return the credentials
-                browser.tabs.remove(tab.id)
-                .then(() => {
+                browser.tabs.remove(tab.id).then(() => {
                   const creds = JSON.parse(_creds);
                   if (!creds.deviceID || !creds.password)
-                    return reject(new Error('Invalid credentials returned from Lattice.'));
+                    return reject(
+                      new Error('Invalid credentials returned from Lattice.')
+                    );
                   return resolve(creds);
-                })
+                });
               } catch (err) {
-                return reject('Failed to get login data from Lattice. Please try again.')
+                return reject(
+                  'Failed to get login data from Lattice. Please try again.'
+                );
               }
-            })
+            });
           }, 500);
         }
-      })
-    })
+      });
+    });
   }
 
   // [re]connect to the Lattice. This should be done frequently to ensure
   // the expected wallet UID is still the one active in the Lattice.
   // This will handle SafeCard insertion/removal events.
-  async _connect () {
+  async _connect() {
     try {
       // Attempt to connect with a Lattice using a shorter timeout. If
       // the device is unplugged it will time out and we don't need to wait
       // 2 minutes for that to happen.
       this.sdkSession.timeout = CONNECT_TIMEOUT;
-      await this.sdkSession.connect(this.creds.deviceID)
+      await this.sdkSession.connect(this.creds.deviceID);
     } finally {
       // Reset to normal timeout no matter what
       this.sdkSession.timeout = SDK_TIMEOUT;
@@ -586,15 +584,14 @@ class LatticeKeyring extends EventEmitter {
       return;
     }
     let url = 'https://signing.gridpl.us';
-    if (this.creds.endpoint)
-      url = this.creds.endpoint
+    if (this.creds.endpoint) url = this.creds.endpoint;
     let setupData = {
       name: this.appName,
       baseUrl: url,
       timeout: SDK_TIMEOUT,
       privKey: this._genSessionKey(),
       network: this.network,
-      skipRetryOnWrongWallet: true,
+      skipRetryOnWrongWallet: true
     };
     /* 
     NOTE: We need state to actually be synced by MetaMask or we can't
@@ -613,14 +610,14 @@ class LatticeKeyring extends EventEmitter {
     return !!setupData.stateData;
   }
 
-  async _fetchAddresses(n=1, i=0, recursedAddrs=[]) {
+  async _fetchAddresses(n = 1, i = 0, recursedAddrs = []) {
     if (!this.isUnlocked()) {
-      throw new Error('No connection to Lattice. Cannot fetch addresses.')
+      throw new Error('No connection to Lattice. Cannot fetch addresses.');
     }
     return this.__fetchAddresses(n, i);
   }
 
-  async __fetchAddresses(n=1, i=0, recursedAddrs=[]) {
+  async __fetchAddresses(n = 1, i = 0, recursedAddrs = []) {
     // Determine if we need to do a recursive call here. We prefer not to
     // because they will be much slower, but Ledger paths require it since
     // they are non-standard.
@@ -630,10 +627,10 @@ class LatticeKeyring extends EventEmitter {
     const shouldRecurse = this._hdPathHasInternalVarIdx();
 
     // Make the request to get the requested address
-    const addrData = { 
+    const addrData = {
       currency: 'ETH',
-      startPath: this._getHDPathIndices(this.hdPath, i), 
-      n: shouldRecurse ? 1 : n,
+      startPath: this._getHDPathIndices(this.hdPath, i),
+      n: shouldRecurse ? 1 : n
     };
     const addrs = await this.sdkSession.getAddresses(addrData);
     // Sanity check -- if this returned 0 addresses, handle the error
@@ -642,25 +639,28 @@ class LatticeKeyring extends EventEmitter {
     }
     // Return the addresses we fetched *without* updating state
     if (shouldRecurse) {
-      return await this.__fetchAddresses(n-1, i+1, recursedAddrs.concat(addrs));
+      return await this.__fetchAddresses(
+        n - 1,
+        i + 1,
+        recursedAddrs.concat(addrs)
+      );
     }
     return addrs;
   }
 
-  async _getPage(increment=0) {
+  async _getPage(increment = 0) {
     try {
       this.page += increment;
-      if (this.page < 0)
-        this.page = 0;
+      if (this.page < 0) this.page = 0;
       const start = PER_PAGE * this.page;
       // Otherwise unlock the device and fetch more addresses
-      await this.unlock()
-      const addrs = await this._fetchAddresses(PER_PAGE, start)
+      await this.unlock();
+      const addrs = await this._fetchAddresses(PER_PAGE, start);
       const accounts = addrs.map((address, i) => {
         return {
           address,
           balance: null,
-          index: start + i + 1,
+          index: start + i + 1
         };
       });
       return accounts;
@@ -678,26 +678,31 @@ class LatticeKeyring extends EventEmitter {
       } catch (err) {
         throw new Error(
           'Failed to get accounts. Please forget the device and try again. ' +
-          'Make sure you do not have a locked SafeCard inserted.'
+            'Make sure you do not have a locked SafeCard inserted.'
         );
       }
     }
   }
 
   _hasCreds() {
-    return this.creds.deviceID !== null && this.creds.password !== null && this.appName;
+    return (
+      this.creds.deviceID !== null &&
+      this.creds.password !== null &&
+      this.appName
+    );
   }
 
   _genSessionKey() {
-    if (this.name && !this.appName) // Migrate from legacy param if needed
+    if (this.name && !this.appName)
+      // Migrate from legacy param if needed
       this.appName = this.name;
     if (!this._hasCreds())
       throw new Error('No credentials -- cannot create session key!');
     const buf = Buffer.concat([
-      Buffer.from(this.creds.password), 
-      Buffer.from(this.creds.deviceID), 
+      Buffer.from(this.creds.password),
+      Buffer.from(this.creds.deviceID),
       Buffer.from(this.appName)
-    ])
+    ]);
     return crypto.createHash('sha256').update(buf).digest();
   }
 
@@ -707,9 +712,8 @@ class LatticeKeyring extends EventEmitter {
   // derivation paths. Ledger is SO ANNOYING TO SUPPORT.
   _hdPathHasInternalVarIdx() {
     const path = this.hdPath.split('/').slice(1);
-    for (let i = 0; i < path.length -1; i++) {
-      if (path[i].indexOf('x') > -1)
-        return true;
+    for (let i = 0; i < path.length - 1; i++) {
+      if (path[i].indexOf('x') > -1) return true;
     }
     return false;
   }
@@ -729,7 +733,7 @@ class LatticeKeyring extends EventEmitter {
 // -----
 // HELPERS
 // -----
-function getTxChainId (tx) {
+function getTxChainId(tx) {
   if (tx && tx.common && typeof tx.common.chainIdBN === 'function') {
     return tx.common.chainIdBN();
   } else if (tx && tx.chainId) {
@@ -741,7 +745,7 @@ function getTxChainId (tx) {
 // We should include calldata decoder information in new requests so that
 // ABI data can be decoded in place (i.e. without loading the definitions
 // ahead of time).
-async function getCalldataDecoder (tx) {
+async function getCalldataDecoder(tx) {
   // If there is no data, we can't decode it, obviously
   if (!tx.data || !tx.data.length || tx.data.length < 4) {
     return null;
@@ -779,7 +783,7 @@ async function getCalldataDecoder (tx) {
 
 // Legacy versions of Lattice firmware signed ETH transactions out of
 // a now deprecated pathway. The request data is built by this helper.
-function getLegacyTxReq (tx) {
+function getLegacyTxReq(tx) {
   let txData;
   try {
     txData = {
@@ -787,14 +791,22 @@ function getLegacyTxReq (tx) {
       gasLimit: `0x${tx.gasLimit.toString('hex')}`,
       to: !!tx.to ? tx.to.toString('hex') : null, // null for contract deployments
       value: `0x${tx.value.toString('hex')}`,
-      data: tx.data.length === 0 ? null : `0x${tx.data.toString('hex')}`,
-    }
+      data: tx.data.length === 0 ? null : `0x${tx.data.toString('hex')}`
+    };
     switch (tx._type) {
       case 2: // eip1559
-        if ((tx.maxPriorityFeePerGas === null || tx.maxFeePerGas === null) ||
-            (tx.maxPriorityFeePerGas === undefined || tx.maxFeePerGas === undefined))
-          throw new Error('`maxPriorityFeePerGas` and `maxFeePerGas` must be included for EIP1559 transactions.');
-        txData.maxPriorityFeePerGas = `0x${tx.maxPriorityFeePerGas.toString('hex')}`;
+        if (
+          tx.maxPriorityFeePerGas === null ||
+          tx.maxFeePerGas === null ||
+          tx.maxPriorityFeePerGas === undefined ||
+          tx.maxFeePerGas === undefined
+        )
+          throw new Error(
+            '`maxPriorityFeePerGas` and `maxFeePerGas` must be included for EIP1559 transactions.'
+          );
+        txData.maxPriorityFeePerGas = `0x${tx.maxPriorityFeePerGas.toString(
+          'hex'
+        )}`;
         txData.maxFeePerGas = `0x${tx.maxFeePerGas.toString('hex')}`;
         txData.accessList = tx.accessList || [];
         txData.type = 2;
@@ -810,12 +822,12 @@ function getLegacyTxReq (tx) {
         break;
     }
   } catch (err) {
-    throw new Error(`Failed to build transaction.`)
+    throw new Error(`Failed to build transaction.`);
   }
   return txData;
 }
 
-async function httpRequest (url) {
+async function httpRequest(url) {
   const resp = await window.fetch(url);
   if (resp.ok) {
     return await resp.text();
@@ -824,5 +836,5 @@ async function httpRequest (url) {
   }
 }
 
-LatticeKeyring.type = keyringType
+LatticeKeyring.type = keyringType;
 export default LatticeKeyring;
