@@ -828,7 +828,7 @@ function getLegacyTxReq(tx) {
 }
 
 async function httpRequest(url) {
-  const resp = await window.fetch(url);
+  const resp = await fetch(url);
   if (resp.ok) {
     return await resp.text();
   } else {
