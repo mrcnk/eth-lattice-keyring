@@ -1,12 +1,11 @@
-import crypto from 'crypto';
-import EventEmitter from 'events';
-import BN from 'bn.js';
-import * as SDK from 'gridplus-sdk';
-import { TransactionFactory } from '@ethereumjs/tx';
-import * as Util from 'ethereumjs-util';
-import rlp from 'rlp';
-
-const keyringType = 'GridPlus Hardware';
+const crypto = require('crypto');
+const EventEmitter = require('events').EventEmitter;
+const BN = require('bn.js');
+const SDK = require('gridplus-sdk');
+const EthTx = require('@ethereumjs/tx');
+const { addHexPrefix } = require('ethereumjs-util');
+const rlp = require('rlp');
+const keyringType = 'Lattice Hardware';
 const HARDENED_OFFSET = 0x80000000;
 const PER_PAGE = 5;
 const CLOSE_CODE = -1000;
@@ -17,7 +16,6 @@ const CONNECT_TIMEOUT = 20000;
 class LatticeKeyring extends EventEmitter {
   constructor(opts = {}) {
     super();
-    this.appName = 'Rabby';
     this.type = keyringType;
     this._resetDefaults();
     this.deserialize(opts);
@@ -27,7 +25,7 @@ class LatticeKeyring extends EventEmitter {
   // Keyring API (per `https://github.com/MetaMask/eth-simple-keyring`)
   //-------------------------------------------------------------------
   async deserialize(opts = {}) {
-    this.hdPath = STANDARD_HD_PATH;
+    if (opts.hdPath) this.hdPath = opts.hdPath;
     if (opts.creds) this.creds = opts.creds;
     if (opts.accounts) this.accounts = opts.accounts;
     if (opts.accountIndices) this.accountIndices = opts.accountIndices;
@@ -39,11 +37,10 @@ class LatticeKeyring extends EventEmitter {
     if (opts.appName) this.appName = opts.appName;
     if (opts.network) this.network = opts.network;
     if (opts.page) this.page = opts.page;
-    if (opts.sdkState) this.sdkState = opts.sdkState;
     return;
   }
 
-  setHdPath(hdPath = STANDARD_HD_PATH) {
+  setHdPath(hdPath) {
     this.hdPath = hdPath;
   }
 
@@ -58,8 +55,7 @@ class LatticeKeyring extends EventEmitter {
       name: this.name, // Legacy; use is deprecated
       network: this.network,
       page: this.page,
-      hdPath: this.hdPath,
-      sdkState: this.sdkSession ? this.sdkSession.getStateData() : null
+      hdPath: this.hdPath
     };
   }
 
@@ -77,19 +73,6 @@ class LatticeKeyring extends EventEmitter {
   // possible edge cases related to this new functionality (it's probably fine - just
   // being cautious). In the future we may remove `bypassOnStateData` entirely.
   async unlock(bypassOnStateData = false) {
-    // Force compatability. `this.accountOpts` were added after other
-    // state params and must be synced in order for this keyring to function.
-    if (
-      !this.accountOpts ||
-      (this.accounts.length > 0 &&
-        this.accountOpts.length != this.accounts.length)
-    ) {
-      this.forgetDevice();
-      throw new Error(
-        'You can now add multiple Lattice and SafeCard accounts at the same time! ' +
-          'Your accounts have been cleared. Please press Continue to add them back in.'
-      );
-    }
     if (this.isUnlocked()) {
       return 'Unlocked';
     }
@@ -111,12 +94,7 @@ class LatticeKeyring extends EventEmitter {
 
   // Add addresses to the local store and return the full result
   async addAccounts(n = 1) {
-    if (n === CLOSE_CODE) {
-      // Special case: use a code to forget the device.
-      // (This function is overloaded due to constraints upstream)
-      this.forgetDevice();
-      return [];
-    } else if (n <= 0) {
+    if (n <= 0) {
       // Avoid non-positive numbers.
       throw new Error('Number of accounts to add must be a positive number.');
     }
@@ -174,7 +152,7 @@ class LatticeKeyring extends EventEmitter {
     const signerPath = this._getHDPathIndices(hdPath, addressIdx);
     // Lattice firmware v0.11.0 implemented EIP1559 and EIP2930
     // We should throw an error if we cannot support this.
-    if (fwVersion.major === 0 && fwVersion.minor <= 11 && txData.type) {
+    if (fwVersion.major === 0 && fwVersion.minor <= 11) {
       throw new Error('Please update Lattice firmware.');
     }
     // Build the signing request
@@ -191,8 +169,18 @@ class LatticeKeyring extends EventEmitter {
         encodingType: SDK.Constants.SIGNING.ENCODINGS.EVM,
         signerPath
       };
+      const supportsDecoderRecursion =
+        fwVersion.major > 0 || fwVersion.minor >= 16;
       // Check if we can decode the calldata
-      data.decoder = await getCalldataDecoder(tx);
+      const { def } = await SDK.Utils.fetchCalldataDecoder(
+        tx.data,
+        tx.to,
+        chainId,
+        supportsDecoderRecursion
+      );
+      if (def) {
+        data.decoder = def;
+      }
       // Send the request
       signedTx = await this.sdkSession.sign({ data });
     } else {
@@ -216,9 +204,9 @@ class LatticeKeyring extends EventEmitter {
     }
 
     // Pack the signature into the return object
-    txToReturn.r = Util.addHexPrefix(signedTx.sig.r.toString('hex'));
-    txToReturn.s = Util.addHexPrefix(signedTx.sig.s.toString('hex'));
-    txToReturn.v = Util.addHexPrefix(v);
+    txToReturn.r = addHexPrefix(signedTx.sig.r.toString('hex'));
+    txToReturn.s = addHexPrefix(signedTx.sig.s.toString('hex'));
+    txToReturn.v = addHexPrefix(v);
 
     // Make sure the active wallet is correct to avoid returning
     // a signature from an unexpected signer.
@@ -229,7 +217,7 @@ class LatticeKeyring extends EventEmitter {
           'switch to an account on your current active wallet.'
       );
     }
-    return TransactionFactory.fromTxData(txToReturn, {
+    return EthTx.TransactionFactory.fromTxData(txToReturn, {
       common: tx.common,
       freeze: Object.isFrozen(tx)
     });
@@ -572,7 +560,7 @@ class LatticeKeyring extends EventEmitter {
       // the device is unplugged it will time out and we don't need to wait
       // 2 minutes for that to happen.
       this.sdkSession.timeout = CONNECT_TIMEOUT;
-      await this.sdkSession.connect(this.creds.deviceID);
+      return this.sdkSession.connect(this.creds.deviceID);
     } finally {
       // Reset to normal timeout no matter what
       this.sdkSession.timeout = SDK_TIMEOUT;
@@ -593,9 +581,10 @@ class LatticeKeyring extends EventEmitter {
       network: this.network,
       skipRetryOnWrongWallet: true
     };
-    /* 
+    /*
     NOTE: We need state to actually be synced by MetaMask or we can't
     use this. See: https://github.com/MetaMask/KeyringController/issues/130
+
     if (this.sdkState) {
       // If we have state data we can fully rehydrate the session.
       setupData = {
@@ -660,7 +649,7 @@ class LatticeKeyring extends EventEmitter {
         return {
           address,
           balance: null,
-          index: start + i + 1
+          index: start + i
         };
       });
       return accounts;
@@ -672,10 +661,16 @@ class LatticeKeyring extends EventEmitter {
       // In either event we should try to resync the wallet and if that
       // fails throw an error
       try {
-        await this._connect();
+        const isPaired = await this._connect();
+        if (!isPaired) {
+          throw new Error('NOT_PAIRED');
+        }
         const accounts = await this._getPage(0);
         return accounts;
       } catch (err) {
+        if (this.accounts.length === 0) {
+          this.forgetDevice();
+        }
         throw new Error(
           'Failed to get accounts. Please forget the device and try again. ' +
             'Make sure you do not have a locked SafeCard inserted.'
@@ -742,45 +737,6 @@ function getTxChainId(tx) {
   return new BN(1);
 }
 
-// We should include calldata decoder information in new requests so that
-// ABI data can be decoded in place (i.e. without loading the definitions
-// ahead of time).
-async function getCalldataDecoder(tx) {
-  // If there is no data, we can't decode it, obviously
-  if (!tx.data || !tx.data.length || tx.data.length < 4) {
-    return null;
-  }
-  let def, resp;
-  const selector = Buffer.from(tx.data.slice(0, 4)).toString('hex');
-  // Get the Solidity JSON ABI definitions from Etherscan, if available
-  try {
-    resp = await httpRequest(
-      `https://api.etherscan.io/api?module=contract&action=getabi&address=${tx.to}`
-    );
-    const abi = JSON.parse(JSON.parse(resp).result);
-    def = SDK.Calldata.EVM.parsers.parseSolidityJSONABI(selector, abi);
-    return def;
-  } catch (err) {
-    console.warn('Failed to fetch ABI data from etherscan', err.message);
-  }
-  // Fallback to checking 4byte
-  try {
-    resp = await httpRequest(
-      `https://www.4byte.directory/api/v1/signatures?hex_signature=0x${selector}`
-    );
-    const fourByteResults = JSON.parse(resp).results;
-    if (fourByteResults.length > 0) {
-      console.warn('WARNING: There are multiple results. Using the first one.');
-    }
-    const canonicalName = fourByteResults[0].text_signature;
-    def = SDK.Calldata.EVM.parsers.parseCanonicalName(selector, canonicalName);
-    return def;
-  } catch (err) {
-    console.warn('Failed to fetch data from 4byte', err.message);
-  }
-  return null;
-}
-
 // Legacy versions of Lattice firmware signed ETH transactions out of
 // a now deprecated pathway. The request data is built by this helper.
 function getLegacyTxReq(tx) {
@@ -828,7 +784,7 @@ function getLegacyTxReq(tx) {
 }
 
 async function httpRequest(url) {
-  const resp = await fetch(url);
+  const resp = await window.fetch(url);
   if (resp.ok) {
     return await resp.text();
   } else {
@@ -837,4 +793,4 @@ async function httpRequest(url) {
 }
 
 LatticeKeyring.type = keyringType;
-export default LatticeKeyring;
+module.exports = LatticeKeyring;
