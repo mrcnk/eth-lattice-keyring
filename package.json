@@ -1,6 +1,6 @@
 {
   "name": "@rabby-wallet/eth-lattice-keyring",
-  "version": "1.1.2",
+  "version": "1.2.0",
   "description": "Keyring for connecting to the Lattice1 hardware wallet",
   "main": "index.js",
   "scripts": {
