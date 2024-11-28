@@ -793,4 +793,4 @@ async function httpRequest(url) {
 }
 
 LatticeKeyring.type = keyringType;
-module.exports = LatticeKeyring;
+export default LatticeKeyring;
