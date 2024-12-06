@@ -21,7 +21,7 @@
     "@ethereumjs/tx": "3.3.2",
     "bn.js": "^5.2.0",
     "ethereumjs-util": "^7.0.10",
-    "gridplus-sdk": "3.1.1",
+    "gridplus-sdk": "https://pkg.pr.new/mrcnk/gridplus-sdk@aeecac6",
     "rlp": "^3.0.0"
   }
 }
